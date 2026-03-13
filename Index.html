@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<title>My Pin Collection ✨</title>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka+One&display=swap" rel="stylesheet"/>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:Georgia,serif;background:linear-gradient(135deg,#fff9e6 0%,#fce8f3 40%,#e8f4ff 100%);min-height:100vh;}
+  ::-webkit-scrollbar{width:6px}::-webkit-scrollbar-thumb{background:#ddd;border-radius:3px}
+  .fredoka{font-family:'Fredoka One',cursive;}
+  @keyframes twinkle{0%,100%{opacity:.15;transform:scale(1)}50%{opacity:.6;transform:scale(1.4)}}
+  @keyframes floatIn{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .float-in{animation:floatIn 0.4s ease both;}
+  .card-scene{perspective:1000px;height:280px;cursor:pointer;}
+  .card-inner{position:relative;width:100%;height:100%;transform-style:preserve-3d;transition:transform 0.55s cubic-bezier(.4,2,.6,1);}
+  .card-inner.flipped{transform:rotateY(180deg);}
+  .card-face{position:absolute;inset:0;backface-visibility:hidden;border-radius:20px;overflow:hidden;}
+  .card-back{transform:rotateY(180deg);}
+  input,select,textarea{font-family:Georgia,serif;font-size:14px;outline:none;box-sizing:border-box;}
+  button{cursor:pointer;font-family:'Fredoka One',cursive;}
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;display:flex;align-items:center;justify-content:center;padding:16px;}
+  .modal-box{background:white;border-radius:24px;padding:28px;width:100%;max-width:440px;box-shadow:0 20px 60px rgba(0,0,0,.3);max-height:92vh;overflow-y:auto;}
+  .pin-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:20px;padding:0 20px 40px;max-width:900px;margin:0 auto;}
+  .star{position:fixed;border-radius:50%;pointer-events:none;animation:twinkle var(--dur) ease-in-out var(--del) infinite;}
+  .tab-btn{flex:1;padding:14px 0;border:none;background:none;cursor:pointer;font-family:'Fredoka One',cursive;font-size:15px;display:flex;align-items:center;justify-content:center;gap:6px;border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .2s;}
+  .sync-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px;}
+</style>
+</head>
+<body>
+
+<!-- Firebase -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, collection, doc, onSnapshot, setDoc, deleteDoc, query, where } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCYtBxBCX91_8E_VXMJVKfvcn5ZbjW87f4",
+  authDomain: "pin-collection-5fdee.firebaseapp.com",
+  projectId: "pin-collection-5fdee",
+  storageBucket: "pin-collection-5fdee.firebasestorage.app",
+  messagingSenderId: "602350909648",
+  appId: "1:602350909648:web:702e0c10f651444852c6d5"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+// ── Data ──────────────────────────────────────────────────────────────────────
+const RARITIES = ["Common","Uncommon","Rare","Limited Edition","Grail"];
+const CONDITIONS = ["Mint","Near Mint","Good","Fair","Poor"];
+const RC = {Common:"#6db8f7",Uncommon:"#7de8a0",Rare:"#c97ef5","Limited Edition":"#f5a623",Grail:"#ff6b9d"};
+const COLORS = ["#6db8f7","#ff6b9d","#f5a623","#7de8a0","#c97ef5","#ff9a6c","#4ecdc4","#f7e96d"];
+const EMOJIS = ["📌","🌟","🏰","🎠","🎡","🎢","🧙","👑","🦁","🐭","🦄","🐟","🌊","☁️","🌈","✨","🎆","🎇","🏖️","🎭","🐸","🐻","🦊","🎪","🎨","🌹","🏹","🎯","🕯️","⏰"];
+const AVATAR_COLORS = ["#ff6b9d","#6db8f7","#f5a623","#7de8a0","#c97ef5","#ff9a6c"];
+
+const PIN_DB = [
+  {name:"Kermit the Frog - Muppets Park Day",series:"Muppets Park Day",rarity:"Limited Edition",emoji:"🐸",tags:["kermit","muppet","frog","park day"],description:"Kermit the Frog dressed for a fun day at the Disney theme park, part of the Muppets Park Day limited edition series."},
+  {name:"Miss Piggy - Muppets Park Day",series:"Muppets Park Day",rarity:"Limited Edition",emoji:"🐷",tags:["miss piggy","muppet","pig","park day"],description:"Miss Piggy in her glamorous park-day outfit, part of the Muppets Park Day limited edition pin set."},
+  {name:"Fozzie Bear - Muppets Park Day",series:"Muppets Park Day",rarity:"Limited Edition",emoji:"🐻",tags:["fozzie","muppet","bear","park day"],description:"Fozzie Bear ready for laughs at the park, from the fan-favorite Muppets Park Day collection."},
+  {name:"Sorcerer Mickey - Fantasia",series:"Fantasia 80th Anniversary",rarity:"Rare",emoji:"🧙",tags:["mickey","sorcerer","fantasia","magic","hat","sorcerer mickey"],description:"Mickey Mouse in his iconic blue sorcerer hat from Fantasia, surrounded by magical stars and sparkles."},
+  {name:"Sorcerer Mickey - Chaser Pin",series:"Mickey Mouse Clubhouse",rarity:"Grail",emoji:"🧙",tags:["mickey","sorcerer","chaser","rare","magic","sorcerer mickey"],description:"Ultra-rare chaser variant of Sorcerer Mickey with glitter accents and a foil background."},
+  {name:"Sorcerer Mickey - Light-Up",series:"Disney Parks",rarity:"Limited Edition",emoji:"🧙",tags:["mickey","sorcerer","light up","glow","sorcerer mickey"],description:"A light-up Sorcerer Mickey pin where the hat and stars glow with LED magic."},
+  {name:"Sorcerer Mickey - Artist Proof",series:"WDI Artist Proof",rarity:"Grail",emoji:"🧙",tags:["mickey","sorcerer","artist proof","wdi","sorcerer mickey"],description:"WDI Artist Proof Sorcerer Mickey, one of just a handful produced for Disney Imagineers."},
+  {name:"Mickey Mouse - Classic Booster",series:"Mickey & Friends",rarity:"Common",emoji:"🐭",tags:["mickey","mouse","classic","booster","friends"],description:"Classic Mickey Mouse in his iconic red shorts and white gloves."},
+  {name:"Goofy - A-Hyuck!",series:"Mickey & Friends",rarity:"Common",emoji:"🐾",tags:["goofy","mickey friends","booster","classic","a-hyuck"],description:"Goofy mid-laugh with his signature floppy hat and vest, captured in his beloved A-Hyuck pose."},
+  {name:"Goofy - Golfing",series:"Disney Sports",rarity:"Uncommon",emoji:"⛳",tags:["goofy","golf","sport","swing","disney sports"],description:"Goofy taking a wild golf swing, clubs flying everywhere, in classic slapstick style."},
+  {name:"Goofy - A Goofy Movie",series:"A Goofy Movie",rarity:"Rare",emoji:"🎬",tags:["goofy","goofy movie","movie","powerline","max"],description:"Goofy and Max from A Goofy Movie — a nostalgic 90s fan favorite."},
+  {name:"Goofy - Halloween",series:"Disney Halloween",rarity:"Uncommon",emoji:"🎃",tags:["goofy","halloween","pumpkin","ghost","costume"],description:"Goofy in a silly ghost costume for Halloween, tripping over his bedsheet as only Goofy could."},
+  {name:"Minnie Mouse - Polka Dot",series:"Minnie Style",rarity:"Common",emoji:"🐭",tags:["minnie","mouse","polka dot","bow","pink"],description:"Minnie Mouse in her signature polka dot bow and dress."},
+  {name:"Mickey Mouse - Club 33",series:"Club 33 Exclusive",rarity:"Grail",emoji:"🐭",tags:["mickey","club 33","exclusive","rare"],description:"An ultra-rare Club 33 exclusive Mickey pin, highly sought after by serious collectors."},
+  {name:"Belle - Golden Ballgown",series:"Beauty and the Beast",rarity:"Uncommon",emoji:"🌹",tags:["belle","beauty","beast","rose","yellow","ballgown","batb","beauty and the beast"],description:"Belle in her famous golden ballgown, dancing with the Beast in the enchanted castle ballroom."},
+  {name:"Beast - Enchanted Rose",series:"Beauty and the Beast",rarity:"Uncommon",emoji:"🥀",tags:["beast","beauty","rose","enchanted","batb","beauty and the beast"],description:"The Beast protecting the enchanted rose under its glass bell jar, petals slowly falling."},
+  {name:"Lumiere - Be Our Guest",series:"Beauty and the Beast",rarity:"Common",emoji:"🕯️",tags:["lumiere","candelabra","be our guest","batb","beauty and the beast"],description:"Lumiere the charming candelabra welcoming you to dinner with a warm 'Be Our Guest!'"},
+  {name:"Cogsworth - Beauty and the Beast",series:"Beauty and the Beast",rarity:"Common",emoji:"⏰",tags:["cogsworth","clock","batb","beauty and the beast"],description:"Cogsworth the fussy mantel clock from Beauty and the Beast, always precise to the second."},
+  {name:"Mrs. Potts & Chip",series:"Beauty and the Beast",rarity:"Common",emoji:"🫖",tags:["mrs potts","chip","teapot","teacup","batb","beauty and the beast"],description:"Mrs. Potts and her son Chip, always ready with warm tea and warm advice."},
+  {name:"Gaston - Villain",series:"Disney Villains",rarity:"Uncommon",emoji:"💪",tags:["gaston","villain","beauty beast","muscle","tavern","batb"],description:"The vain and boastful Gaston flexing in the tavern, the most admired man in town."},
+  {name:"Belle & Beast - Dancing",series:"Beauty and the Beast",rarity:"Rare",emoji:"💛",tags:["belle","beast","dance","ballroom","batb","beauty and the beast"],description:"Belle and the Beast waltzing under a starlit sky in the enchanted castle ballroom."},
+  {name:"Enchanted Rose - 30th Anniversary",series:"Beauty and the Beast 30th Anniversary",rarity:"Limited Edition",emoji:"🌹",tags:["rose","enchanted","beauty beast","30th","anniversary","batb"],description:"A standalone enchanted rose pin with petals shimmering in red enamel and gold accents."},
+  {name:"Tod & Copper - Best Friends",series:"The Fox and the Hound",rarity:"Uncommon",emoji:"🦊",tags:["tod","copper","fox","hound","best friends","fox and the hound"],description:"Tod the fox and Copper the hound pup playing together as best friends."},
+  {name:"Tod - Fox and the Hound",series:"The Fox and the Hound",rarity:"Common",emoji:"🦊",tags:["tod","fox","fox and the hound","orange"],description:"Tod the young fox with his bright orange fur and curious eyes."},
+  {name:"Copper - Fox and the Hound",series:"The Fox and the Hound",rarity:"Common",emoji:"🐕",tags:["copper","hound","dog","fox and the hound","brown"],description:"Copper the loyal hound dog with his droopy ears and warm brown eyes."},
+  {name:"Tod & Copper - Booster Set",series:"Classic Disney Booster",rarity:"Rare",emoji:"🦊",tags:["tod","copper","fox","hound","booster","set","fox and the hound"],description:"A two-pin booster set featuring both Tod and Copper side by side."},
+  {name:"Robin Hood - Outfoxing the Sheriff",series:"Robin Hood",rarity:"Uncommon",emoji:"🏹",tags:["robin hood","fox","arrow","sheriff","merry men"],description:"Robin Hood the fox drawing his bow with a sly grin, ready to outfox the Sheriff of Nottingham."},
+  {name:"Maid Marian - Robin Hood",series:"Robin Hood",rarity:"Uncommon",emoji:"🦊",tags:["maid marian","marian","robin hood","fox","pink"],description:"Maid Marian the elegant vixen in her pink dress, graceful and kind-hearted."},
+  {name:"Little John - Robin Hood",series:"Robin Hood",rarity:"Common",emoji:"🐻",tags:["little john","bear","robin hood","big guy","brown"],description:"Little John the lovable bear, Robin Hood's best friend and partner in merry mischief."},
+  {name:"Prince John - Robin Hood",series:"Disney Villains",rarity:"Uncommon",emoji:"👑",tags:["prince john","villain","robin hood","lion","crown","thumb"],description:"The cowardly lion Prince John sitting on his throne, sucking his thumb and demanding more taxes."},
+  {name:"Robin Hood - Archery Tournament",series:"Robin Hood",rarity:"Rare",emoji:"🎯",tags:["robin hood","archery","tournament","disguise","fox","rare"],description:"Robin Hood disguised at the archery tournament, splitting the winning arrow with pinpoint precision."},
+  {name:"Hidden Mickey - Classic Three Circle",series:"Hidden Mickey",rarity:"Common",emoji:"🐭",tags:["hidden mickey","three circle","classic","hidden","mickey"],description:"The original three-circle Hidden Mickey silhouette, a classic every collector needs."},
+  {name:"Hidden Mickey - Haunted Mansion",series:"Hidden Mickey",rarity:"Uncommon",emoji:"👻",tags:["hidden mickey","haunted mansion","ghost","hidden","booster"],description:"A Hidden Mickey cleverly worked into the wallpaper of the Haunted Mansion."},
+  {name:"Hidden Mickey - Space Mountain",series:"Hidden Mickey",rarity:"Uncommon",emoji:"🚀",tags:["hidden mickey","space mountain","rocket","stars","hidden"],description:"Hidden Mickey worked into the star field of Space Mountain, glowing faintly in the dark."},
+  {name:"Hidden Mickey - Pirates of Caribbean",series:"Hidden Mickey",rarity:"Uncommon",emoji:"🏴‍☠️",tags:["hidden mickey","pirates","caribbean","hidden","cannon"],description:"A Hidden Mickey hidden among the treasures and cannonballs of Pirates of the Caribbean."},
+  {name:"Hidden Mickey - Fantasyland Booster",series:"Hidden Mickey Series 2",rarity:"Rare",emoji:"🏰",tags:["hidden mickey","fantasyland","booster","castle","series 2"],description:"Hidden Mickey booster set from Fantasyland, with Mickeys concealed in classic ride scenes."},
+  {name:"Cinderella - Happily Ever After",series:"Disney Princess",rarity:"Uncommon",emoji:"👑",tags:["cinderella","princess","castle","carriage","blue"],description:"Cinderella in her shimmering blue ball gown, ready for the royal ball."},
+  {name:"Ariel - Under the Sea",series:"The Little Mermaid",rarity:"Uncommon",emoji:"🐟",tags:["ariel","mermaid","little mermaid","under the sea","sea"],description:"Ariel the Little Mermaid exploring the colorful coral reef."},
+  {name:"Elsa - Frozen",series:"Frozen",rarity:"Rare",emoji:"❄️",tags:["elsa","frozen","ice","snow","blue","let it go"],description:"Elsa in her signature ice-blue gown casting her powerful ice magic."},
+  {name:"Moana - Wayfinder",series:"Moana",rarity:"Uncommon",emoji:"🌊",tags:["moana","ocean","wayfinder","hawaii","wave"],description:"Moana standing proudly with her oar on the ocean, wind in her hair."},
+  {name:"Hitchhiking Ghosts",series:"Walt Disney World 50th",rarity:"Limited Edition",emoji:"👻",tags:["haunted mansion","ghost","gus","ezra","phineas","hitchhiking"],description:"Gus, Ezra, and Phineas hitchhiking their way out of the Haunted Mansion, glow-in-the-dark variant."},
+  {name:"Madame Leota - Haunted Mansion",series:"Haunted Mansion",rarity:"Rare",emoji:"🔮",tags:["haunted mansion","leota","crystal ball","ghost","séance"],description:"The disembodied head of Madame Leota floating in her crystal ball."},
+  {name:"Hatbox Ghost - Haunted Mansion",series:"Haunted Mansion",rarity:"Rare",emoji:"🎩",tags:["haunted mansion","hatbox ghost","hat","rare"],description:"The iconic Hatbox Ghost with his sinister grin."},
+  {name:"Stitch - Surfing Aulani",series:"Aulani Exclusives",rarity:"Uncommon",emoji:"🏄",tags:["stitch","surfing","aulani","hawaii","beach","blue"],description:"Experiment 626 catching waves at Aulani, Disney's Hawaiian resort."},
+  {name:"Lilo & Stitch - Ohana",series:"Lilo & Stitch",rarity:"Uncommon",emoji:"🌺",tags:["lilo","stitch","ohana","hawaii","family"],description:"Lilo and Stitch together under a rainbow, celebrating ohana — family."},
+  {name:"Maleficent - Dragon Form",series:"Disney Villains",rarity:"Rare",emoji:"🐉",tags:["maleficent","villain","dragon","green","sleeping beauty"],description:"Maleficent transformed into her terrifying dragon form, breathing green flames."},
+  {name:"Baby Yoda - The Mandalorian",series:"Star Wars: The Mandalorian",rarity:"Limited Edition",emoji:"🟢",tags:["baby yoda","grogu","mandalorian","star wars","cute"],description:"The Child floating in his hover-pram, big eyes wide with Force-fueled wonder."},
+  {name:"Spider-Man - Avengers Campus",series:"Avengers Campus",rarity:"Rare",emoji:"🕷️",tags:["spiderman","spider man","marvel","avengers","campus"],description:"Spider-Man swinging through Avengers Campus in his red and blue suit."},
+  {name:"Cinderella Castle - WDW 50th",series:"Walt Disney World 50th",rarity:"Limited Edition",emoji:"🏰",tags:["castle","cinderella","50th","anniversary","gold"],description:"Cinderella Castle shimmering in golden EARidescent details for WDW's 50th Anniversary."},
+  {name:"Woody - Toy Story",series:"Toy Story",rarity:"Common",emoji:"🤠",tags:["woody","toy story","cowboy","pixar","hat"],description:"Sheriff Woody in his cowboy hat and vest, ready for adventure."},
+  {name:"Marie - Brush of Magic",series:"Brush of Magic",rarity:"Limited Edition",emoji:"🐱",tags:["marie","aristocats","cat","white","pink","brush of magic"],description:"The elegant Marie rendered in a painterly Brush of Magic style."},
+  {name:"Pirates of the Caribbean",series:"Park Attractions",rarity:"Common",emoji:"🏴‍☠️",tags:["pirates","caribbean","skull","ship","jolly roger"],description:"A swashbuckling Pirates of the Caribbean pin featuring the iconic skull and crossed swords."},
+];
+
+const SAMPLE_PINS = [
+  {id:"sample1",name:"Sorcerer Mickey - Fantasia",description:"Mickey Mouse in his iconic Fantasia sorcerer outfit, stars and magic swirling.",series:"Fantasia 80th Anniversary",rarity:"Rare",condition:"Mint",photo:null,emoji:"🧙",color:"#c97ef5",pinpicsUrl:"",type:"pin"},
+  {id:"sample2",name:"Hitchhiking Ghosts",description:"Gus, Ezra, and Phineas hitching a ride. Glow-in-the-dark variant.",series:"Walt Disney World 50th",rarity:"Limited Edition",condition:"Near Mint",photo:null,emoji:"👻",color:"#f5a623",pinpicsUrl:"",type:"pin"},
+  {id:"sample3",name:"Stitch - Surfing Aulani",description:"Experiment 626 catching waves at Aulani, Disney's Hawaiian resort.",series:"Aulani Exclusives",rarity:"Uncommon",condition:"Mint",photo:null,emoji:"🏄",color:"#7de8a0",pinpicsUrl:"",type:"pin"},
+];
+
+function searchPins(q) {
+  const ql = q.toLowerCase().trim();
+  if (!ql) return [];
+  return PIN_DB.map(p => {
+    let s = 0;
+    const nl = p.name.toLowerCase(), sl = p.series.toLowerCase();
+    if (nl === ql) s += 100; else if (nl.startsWith(ql)) s += 50; else if (nl.includes(ql)) s += 30;
+    if (sl.includes(ql)) s += 20;
+    p.tags.forEach(t => { if (t === ql) s += 40; else if (t.startsWith(ql)) s += 20; else if (t.includes(ql)) s += 10; });
+    return {...p, score:s};
+  }).filter(p => p.score > 0).sort((a,b) => b.score - a.score).slice(0, 8);
+}
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let state = {
+  screen: localStorage.getItem("pinapp_lastuser") ? "collection" : "profile",
+  user: localStorage.getItem("pinapp_lastuser") || null,
+  pins: [], wishlist: [],
+  activeTab: "collection",
+  syncStatus: "connecting",
+  showForm: false, showSearch: false, showWishSearch: false,
+  editing: null, prefill: null,
+  search: "", filterRarity: "All", filterSeries: "All",
+  formData: null,
+  searchQuery: "", searchResults: [], searchSelected: null,
+  unsub: [],
+};
+
+let nextId = Date.now();
+function genId() { return "pin_" + (nextId++); }
+
+// ── Firebase ──────────────────────────────────────────────────────────────────
+function subscribeUser(user) {
+  state.unsub.forEach(u => u());
+  state.unsub = [];
+  state.syncStatus = "connecting";
+  render();
+
+  const pinsQ = query(collection(db, "pins"), where("owner", "==", user));
+  const wishQ = query(collection(db, "wishlist"), where("owner", "==", user));
+
+  const u1 = onSnapshot(pinsQ, snap => {
+    state.pins = snap.docs.map(d => ({id: d.id, ...d.data()}));
+    state.syncStatus = "synced";
+    render();
+  }, () => { state.syncStatus = "error"; render(); });
+
+  const u2 = onSnapshot(wishQ, snap => {
+    state.wishlist = snap.docs.map(d => ({id: d.id, ...d.data()}));
+    render();
+  });
+
+  state.unsub = [u1, u2];
+}
+
+async function savePin(pin, collectionName) {
+  const {id, ...data} = pin;
+  await setDoc(doc(db, collectionName, id), {...data, owner: state.user});
+}
+
+async function removePin(id, collectionName) {
+  await deleteDoc(doc(db, collectionName, id));
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function render() {
+  const root = document.getElementById("root");
+  if (!root) return;
+  if (state.screen === "profile") { root.innerHTML = renderProfileScreen(); bindProfileEvents(); }
+  else { root.innerHTML = renderApp(); bindAppEvents(); }
+}
+
+// ── Profile Screen ────────────────────────────────────────────────────────────
+function getProfiles() {
+  try { return JSON.parse(localStorage.getItem("pinapp_profiles") || '["Rey","Jessie"]'); } catch { return ["Rey","Jessie"]; }
+}
+function saveProfiles(p) { localStorage.setItem("pinapp_profiles", JSON.stringify(p)); }
+
+function getPinCount(user) {
+  // For profile screen, just show from state if current user, else 0
+  if (user === state.user) return state.pins.length;
+  return "?";
+}
+
+function renderProfileScreen() {
+  const profiles = getProfiles();
+  const cards = profiles.map((name, i) => {
+    const col = AVATAR_COLORS[i % AVATAR_COLORS.length];
+    const col2 = AVATAR_COLORS[(i+1) % AVATAR_COLORS.length];
+    return `
+      <button class="profile-btn" data-user="${name}" style="padding:18px 24px;border-radius:18px;border:none;background:white;box-shadow:0 4px 20px ${col}44;cursor:pointer;display:flex;align-items:center;gap:16px;width:100%;text-align:left;transition:transform .15s;">
+        <div style="width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,${col},${col2});display:flex;align-items:center;justify-content:center;font-size:20px;color:white;font-family:'Fredoka One',cursive;flex-shrink:0;">${name[0].toUpperCase()}</div>
+        <div style="flex:1;">
+          <div class="fredoka" style="font-size:18px;color:#333;">${name}</div>
+          <div style="font-size:12px;color:#bbb;font-style:italic;">Tap to open your collection</div>
+        </div>
+        <div style="font-size:22px;color:#ddd;">›</div>
+      </button>`;
+  }).join("");
+
+  return `
+    ${renderStars()}
+    <div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;position:relative;z-index:1;">
+      <div style="font-size:48px;margin-bottom:8px;">📌</div>
+      <div class="fredoka" style="font-size:32px;background:linear-gradient(90deg,#ff6b9d,#f5a623,#6db8f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:6px;">My Pin Collection</div>
+      <div style="font-size:15px;color:#bbb;font-style:italic;margin-bottom:36px;">Who's collecting today?</div>
+      <div style="display:flex;flex-direction:column;gap:14px;width:100%;max-width:320px;">
+        ${cards}
+        <div id="add-profile-area">
+          <button id="show-add-profile" style="padding:14px 24px;border-radius:18px;border:2px dashed #ddd;background:transparent;color:#bbb;font-family:'Fredoka One',cursive;font-size:15px;width:100%;">+ Add a collector</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function bindProfileEvents() {
+  document.querySelectorAll(".profile-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const user = btn.dataset.user;
+      state.user = user;
+      state.screen = "collection";
+      state.pins = [];
+      state.wishlist = [];
+      state.syncStatus = "connecting";
+      localStorage.setItem("pinapp_lastuser", user);
+      subscribeUser(user);
+      render();
+    });
+  });
+  document.getElementById("show-add-profile")?.addEventListener("click", () => {
+    const area = document.getElementById("add-profile-area");
+    area.innerHTML = `
+      <div style="display:flex;gap:8px;">
+        <input id="new-profile-name" placeholder="Enter name..." style="flex:1;padding:12px 16px;border-radius:12px;border:2px solid #6db8f7;font-size:15px;" autofocus/>
+        <button id="confirm-add-profile" style="padding:12px 18px;border-radius:12px;border:none;background:#4e9af1;color:white;font-family:'Fredoka One',cursive;font-size:15px;">Add</button>
+        <button id="cancel-add-profile" style="padding:12px 14px;border-radius:12px;border:none;background:#eee;color:#999;font-family:'Fredoka One',cursive;font-size:15px;">✕</button>
+      </div>`;
+    document.getElementById("new-profile-name").focus();
+    document.getElementById("confirm-add-profile").addEventListener("click", () => {
+      const name = document.getElementById("new-profile-name").value.trim();
+      if (!name) return;
+      const profiles = getProfiles();
+      if (!profiles.includes(name)) { profiles.push(name); saveProfiles(profiles); }
+      render();
+    });
+    document.getElementById("cancel-add-profile").addEventListener("click", () => render());
+  });
+}
+
+// ── Stars ─────────────────────────────────────────────────────────────────────
+function renderStars() {
+  return [...Array(24)].map(() => {
+    const w = Math.random()*6+2, dur = Math.random()*3+2, del = Math.random()*3, hue = Math.random()*60+30;
+    return `<div class="star" style="width:${w}px;height:${w}px;left:${Math.random()*100}%;top:${Math.random()*100}%;background:hsl(${hue},100%,80%);opacity:${Math.random()*0.4+0.1};--dur:${dur}s;--del:${del}s;z-index:0;"></div>`;
+  }).join("");
+}
+
+// ── Main App ──────────────────────────────────────────────────────────────────
+function renderApp() {
+  const isWish = state.activeTab === "wishlist";
+  const activePins = isWish ? state.wishlist : state.pins;
+  const q = state.search.toLowerCase();
+  const filtered = activePins.filter(p =>
+    (!q || p.name.toLowerCase().includes(q) || (p.series||"").toLowerCase().includes(q) || (p.description||"").toLowerCase().includes(q))
+    && (state.filterRarity === "All" || p.rarity === state.filterRarity)
+    && (state.filterSeries === "All" || p.series === state.filterSeries)
+  );
+  const seriesList = ["All", ...Array.from(new Set(activePins.map(p => p.series).filter(Boolean)))];
+  const stats = {
+    total: state.pins.length,
+    grails: state.pins.filter(p => p.rarity === "Grail").length,
+    limited: state.pins.filter(p => p.rarity === "Limited Edition").length,
+    series: new Set(state.pins.map(p => p.series)).size,
+  };
+
+  const syncColor = state.syncStatus === "synced" ? "#7de8a0" : state.syncStatus === "error" ? "#ff6b6b" : "#f5a623";
+  const syncLabel = state.syncStatus === "synced" ? "Synced" : state.syncStatus === "error" ? "Offline" : "Syncing...";
+
+  const seriesOptions = seriesList.map(s => `<option value="${s}" ${state.filterSeries===s?"selected":""}>${s}</option>`).join("");
+  const rarityOptions = `<option value="All" ${state.filterRarity==="All"?"selected":""}>All Rarities</option>` + RARITIES.map(r => `<option value="${r}" ${state.filterRarity===r?"selected":""}>${r}</option>`).join("");
+
+  const pinCards = filtered.map((pin, i) => renderPinCard(pin, isWish, i)).join("");
+  const emptyMsg = filtered.length === 0 && activePins.length > 0
+    ? `<div style="grid-column:1/-1;text-align:center;padding:60px;color:#aaa;font-style:italic;">No pins match your search ✨</div>` : "";
+  const wishEmpty = isWish && state.wishlist.length === 0 ? `
+    <div style="max-width:900px;margin:0 auto;padding:0 20px 20px;">
+      <div style="background:linear-gradient(135deg,#fffbf0,#fff0fa);border-radius:20px;padding:32px 24px;text-align:center;border:2px dashed #f5a62366;">
+        <div style="font-size:44px;margin-bottom:12px;">🌟</div>
+        <div class="fredoka" style="font-size:22px;color:#f5a623;margin-bottom:8px;">Your wish list is empty</div>
+        <div style="font-size:14px;color:#aaa;font-style:italic;line-height:1.6;">Add pins you're hunting for! When you find one,<br>flip the card and tap "Got it!" to move it to your collection.</div>
+      </div>
+    </div>` : "";
+
+  return `
+    ${renderStars()}
+    <div style="min-height:100vh;position:relative;z-index:1;">
+      <div style="background:linear-gradient(90deg,#ff6b9d,#f5a623,#6db8f7,#7de8a0);height:4px;"></div>
+      <div style="background:white;box-shadow:0 4px 20px rgba(0,0,0,.05);width:100%;">
+        <div style="max-width:900px;margin:0 auto;padding:24px 24px 18px;display:flex;flex-direction:column;align-items:center;text-align:center;position:relative;">
+          <button id="switch-user-btn" style="position:absolute;top:18px;right:16px;padding:6px 14px;border-radius:20px;border:2px solid #e5e7eb;background:white;color:#aaa;font-family:'Fredoka One',cursive;font-size:12px;display:flex;align-items:center;gap:5px;">
+            👤 ${state.user} <span style="font-size:10px;color:#ccc;">▾</span>
+          </button>
+          <div style="position:absolute;top:22px;left:16px;display:flex;align-items:center;gap:5px;font-size:12px;color:${syncColor};">
+            <span class="sync-dot" style="background:${syncColor};"></span>${syncLabel}
+          </div>
+          <div class="fredoka" style="font-size:34px;background:linear-gradient(90deg,#ff6b9d,#f5a623,#6db8f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent;line-height:1.15;margin-top:4px;">✨ My Pin Collection ✨</div>
+          <div style="font-size:13px;color:#ccc;font-style:italic;margin-top:5px;">Tap a card to flip it</div>
+          <div style="display:flex;justify-content:center;align-items:center;gap:24px;margin-top:16px;flex-wrap:wrap;">
+            ${[{l:"Total Pins",v:stats.total,c:"#6db8f7"},{l:"Grails",v:stats.grails,c:"#ff6b9d"},{l:"Limited Ed.",v:stats.limited,c:"#f5a623"},{l:"Series",v:stats.series,c:"#7de8a0"}].map(s =>
+              `<div style="text-align:center;"><div class="fredoka" style="font-size:28px;color:${s.c};line-height:1;">${s.v}</div><div style="font-size:10px;color:#bbb;letter-spacing:.5px;margin-top:3px;text-transform:uppercase;">${s.l}</div></div>`
+            ).join("")}
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;border-bottom:2px solid #f0f0f0;background:white;max-width:900px;margin:0 auto;padding:0 20px;">
+        <button class="tab-btn" data-tab="collection" style="color:${!isWish?"#4e9af1":"#aaa"};border-bottom-color:${!isWish?"#4e9af1":"transparent"};">
+          📌 My Collection <span style="background:${!isWish?"#4e9af122":"#f0f0f0"};color:${!isWish?"#4e9af1":"#bbb"};border-radius:999px;font-size:12px;font-weight:700;padding:1px 8px;">${state.pins.length}</span>
+        </button>
+        <button class="tab-btn" data-tab="wishlist" style="color:${isWish?"#f5a623":"#aaa"};border-bottom-color:${isWish?"#f5a623":"transparent"};">
+          🌟 Wish List <span style="background:${isWish?"#f5a62322":"#f0f0f0"};color:${isWish?"#f5a623":"#bbb"};border-radius:999px;font-size:12px;font-weight:700;padding:1px 8px;">${state.wishlist.length}</span>
+        </button>
+      </div>
+
+      <div style="padding:14px 20px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;max-width:900px;margin:0 auto;">
+        <input id="search-input" value="${state.search}" placeholder="${isWish?"🔍  Search wish list...":"🔍  Search my pins..."}" style="flex:1 1 160px;padding:10px 16px;border-radius:999px;border:2px solid #e5e7eb;font-size:14px;background:white;min-width:120px;"/>
+        <select id="rarity-filter" style="padding:10px 14px;border-radius:999px;border:2px solid #e5e7eb;font-family:'Fredoka One',cursive;font-size:13px;background:white;">${rarityOptions}</select>
+        <select id="series-filter" style="padding:10px 14px;border-radius:999px;border:2px solid #e5e7eb;font-family:'Fredoka One',cursive;font-size:13px;background:white;max-width:160px;">${seriesOptions}</select>
+        ${!isWish ? `<button id="open-db-search" style="padding:10px 16px;border-radius:999px;border:2px solid #6db8f7;background:#e8f4ff;color:#4e9af1;font-size:14px;white-space:nowrap;">🔍 Pin Database</button>` : ""}
+        ${isWish
+          ? `<button id="add-wish-btn" style="padding:10px 18px;border-radius:999px;border:none;background:linear-gradient(90deg,#f5a623,#ff6b9d);color:white;font-size:14px;box-shadow:0 4px 14px #f5a62344;white-space:nowrap;">+ Add to Wish List 🌟</button>`
+          : `<button id="add-pin-btn" style="padding:10px 18px;border-radius:999px;border:none;background:linear-gradient(90deg,#ff6b9d,#f5a623);color:white;font-size:15px;box-shadow:0 4px 14px #ff6b9d44;white-space:nowrap;">+ Add Pin</button>`
+        }
+      </div>
+
+      ${wishEmpty}
+      <div class="pin-grid">${emptyMsg}${pinCards}</div>
+    </div>
+
+    ${state.showSearch ? renderSearchModal(false) : ""}
+    ${state.showWishSearch ? renderSearchModal(true) : ""}
+    ${state.showForm ? renderPinForm() : ""}
+  `;
+}
+
+function renderPinCard(pin, isWish, idx) {
+  const rc = RC[pin.rarity] || "#aaa";
+  const photo = pin.photo ? `<img src="${pin.photo}" style="width:80px;height:80px;border-radius:12px;object-fit:cover;border:3px solid ${pin.color||"#6db8f7"};" onerror="this.style.display='none'"/>` : `<span style="font-size:56px;line-height:1;">${pin.emoji||"📌"}</span>`;
+  const wishBadge = isWish ? `<div style="position:absolute;top:10px;right:12px;font-size:16px;">🌟</div>` : "";
+  const backBtns = isWish
+    ? `<button class="card-move-btn" data-id="${pin.id}" style="flex:2;padding:6px 0;border-radius:10px;border:none;background:#7de8a0;color:white;font-weight:700;font-size:11px;font-family:'Fredoka One',cursive;">Got it! Move to Collection</button>
+       <button class="card-del-btn" data-id="${pin.id}" data-col="wishlist" style="flex:1;padding:6px 0;border-radius:10px;border:none;background:#ff6b6b;color:white;font-weight:700;font-size:11px;font-family:'Fredoka One',cursive;">Remove</button>`
+    : `<button class="card-edit-btn" data-id="${pin.id}" style="flex:1;padding:6px 0;border-radius:10px;border:none;background:#4e9af1;color:white;font-weight:700;font-size:12px;font-family:'Fredoka One',cursive;">Edit</button>
+       <button class="card-del-btn" data-id="${pin.id}" data-col="pins" style="flex:1;padding:6px 0;border-radius:10px;border:none;background:#ff6b6b;color:white;font-weight:700;font-size:12px;font-family:'Fredoka One',cursive;">Remove</button>`;
+
+  return `
+    <div class="float-in card-scene" style="animation-delay:${idx*0.05}s;" data-id="${pin.id}">
+      <div class="card-inner" id="card-inner-${pin.id}">
+        <div class="card-face" style="background:white;box-shadow:0 8px 32px ${pin.color||"#6db8f7"}55,0 2px 8px rgba(0,0,0,.1);border:3px solid ${pin.color||"#6db8f7"};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:16px;">
+          <div style="position:absolute;top:0;left:0;right:0;height:6px;background:linear-gradient(90deg,${pin.color||"#6db8f7"},rgba(255,255,255,.3),${pin.color||"#6db8f7"});border-radius:17px 17px 0 0;"></div>
+          ${wishBadge}
+          <div style="filter:drop-shadow(0 2px 8px rgba(0,0,0,.2));">${photo}</div>
+          <div class="fredoka" style="font-size:16px;color:#222;text-align:center;line-height:1.3;">${pin.name}</div>
+          <div style="background:${rc}33;color:${rc};border:1.5px solid ${rc};border-radius:999px;font-size:11px;font-weight:700;padding:3px 12px;">${pin.rarity}</div>
+          <div style="font-size:12px;color:#888;font-style:italic;text-align:center;">${pin.series||""}</div>
+          <div style="font-size:11px;color:#ccc;">tap to flip</div>
+        </div>
+        <div class="card-face card-back" style="background:linear-gradient(135deg,${pin.color||"#6db8f7"}22,white);box-shadow:0 8px 32px ${pin.color||"#6db8f7"}55;border:3px solid ${pin.color||"#6db8f7"};padding:18px;display:flex;flex-direction:column;gap:8px;">
+          <div class="fredoka" style="font-size:15px;color:#333;">${pin.name}</div>
+          <p style="font-size:12px;color:#555;line-height:1.5;margin:0;flex:1;">${pin.description||""}</p>
+          <div style="display:flex;flex-direction:column;gap:5px;">
+            ${!isWish ? `<div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:#999;">Condition</span><span style="color:#333;font-weight:600;">${pin.condition||"Mint"}</span></div>` : ""}
+            <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:#999;">Series</span><span style="color:#333;font-weight:600;text-align:right;max-width:140px;">${pin.series||""}</span></div>
+            ${pin.pinpicsUrl ? `<a href="${pin.pinpicsUrl}" target="_blank" style="font-size:11px;color:#6db8f7;text-decoration:none;">🔗 PinPics</a>` : ""}
+          </div>
+          <div style="display:flex;gap:8px;">${backBtns}</div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderSearchModal(forWish) {
+  const results = state.searchResults.map(pin => {
+    const rc2 = RC[pin.rarity]||"#aaa";
+    const isSel = state.searchSelected && state.searchSelected.name === pin.name;
+    return `<div class="search-result" data-name="${pin.name}" style="padding:12px 14px;border-radius:14px;border:2px solid ${isSel?"#6db8f7":"#e5e7eb"};background:${isSel?"#f0f8ff":"white"};cursor:pointer;display:flex;gap:12px;align-items:center;margin-bottom:8px;">
+      <span style="font-size:28px;">${pin.emoji}</span>
+      <div style="flex:1;"><div class="fredoka" style="font-size:14px;color:#333;">${pin.name}</div><div style="font-size:12px;color:#999;font-style:italic;">${pin.series}</div></div>
+      <span style="background:${rc2}22;color:${rc2};border:1.5px solid ${rc2};border-radius:999px;font-size:10px;font-weight:700;padding:2px 8px;white-space:nowrap;">${pin.rarity}</span>
+    </div>`;
+  }).join("");
+
+  const sel = state.searchSelected;
+  const rc = sel ? (RC[sel.rarity]||"#aaa") : "#aaa";
+  const preview = sel ? `
+    <div style="padding:16px;background:#fffbf0;border-radius:16px;border:2px solid ${rc}44;margin-bottom:16px;">
+      <div style="display:flex;gap:12px;align-items:center;margin-bottom:8px;">
+        <span style="font-size:36px;">${sel.emoji}</span>
+        <div>
+          <div class="fredoka" style="font-size:16px;color:#333;">${sel.name}</div>
+          <div style="font-size:12px;color:#999;font-style:italic;">${sel.series}</div>
+          <span style="background:${rc}22;color:${rc};border:1.5px solid ${rc};border-radius:999px;font-size:11px;font-weight:700;padding:2px 10px;">${sel.rarity}</span>
+        </div>
+      </div>
+      <p style="font-size:12px;color:#666;line-height:1.5;margin:0;">${sel.description}</p>
+    </div>` : "";
+
+  return `
+    <div class="modal-overlay" id="search-modal">
+      <div class="modal-box">
+        <div class="fredoka" style="font-size:22px;color:#333;margin-bottom:4px;">${forWish?"🌟 Add to Wish List":"🔍 Pin Database Search"}</div>
+        <div style="font-size:13px;color:#aaa;margin-bottom:18px;">Search by character, series, or keyword.</div>
+        <input id="db-search-input" value="${state.searchQuery}" placeholder="e.g. Belle, Hidden Mickey, Goofy..." style="width:100%;padding:12px 16px;border-radius:14px;border:2px solid #6db8f7;font-size:15px;margin-bottom:14px;"/>
+        <div id="search-results-list">${results}</div>
+        ${state.searchResults.length === 0 && state.searchQuery.length > 1 ? `<div style="text-align:center;color:#bbb;font-style:italic;padding:20px 0;">No pins found. Try a different keyword.</div>` : ""}
+        ${preview}
+        <div style="display:flex;gap:10px;">
+          <button id="search-cancel-btn" style="flex:1;padding:11px 0;border-radius:12px;border:none;background:#eee;color:#666;font-size:14px;">Cancel</button>
+          <button id="search-use-btn" ${!sel?"disabled":""} style="flex:2;padding:11px 0;border-radius:12px;border:none;background:${sel?"linear-gradient(90deg,#ff6b9d,#f5a623)":"#eee"};color:${sel?"white":"#aaa"};font-size:15px;">${forWish?"Add to Wish List 🌟":"Use This Pin ✨"}</button>
+        </div>
+        <div style="margin-top:14px;padding:10px 14px;background:#f8f8f8;border-radius:12px;font-size:12px;color:#aaa;">💡 Don't see your pin? Add it manually with the form.</div>
+      </div>
+    </div>`;
+}
+
+function renderPinForm() {
+  const f = state.formData || {name:"",description:"",series:"",rarity:"Common",condition:"Mint",photo:null,emoji:"📌",color:"#6db8f7",pinpicsUrl:""};
+  const isEdit = state.editing !== null;
+  const rarOpts = RARITIES.map(r => `<option value="${r}" ${f.rarity===r?"selected":""}>${r}</option>`).join("");
+  const conOpts = CONDITIONS.map(c => `<option value="${c}" ${f.condition===c?"selected":""}>${c}</option>`).join("");
+  const colorDots = COLORS.map(c => `<div class="color-dot" data-color="${c}" style="width:28px;height:28px;border-radius:50%;background:${c};cursor:pointer;border:${f.color===c?"3px solid #333":"3px solid transparent"};box-shadow:${f.color===c?"0 0 0 2px white,0 0 0 4px #333":"none"};flex-shrink:0;transition:all .15s;"></div>`).join("");
+  const emojiPicker = EMOJIS.map(e => `<span class="emoji-pick" data-emoji="${e}" style="font-size:22px;cursor:pointer;padding:4px;border-radius:8px;background:${f.emoji===e?"#f0f4ff":"transparent"};border:${f.emoji===e?"2px solid #6db8f7":"2px solid transparent"};">${e}</span>`).join("");
+  const photoPreview = f.photo ? `<img src="${f.photo}" style="width:56px;height:56px;border-radius:10px;object-fit:cover;border:2px solid #e5e7eb;" onerror="this.style.display='none'"/>` : "";
+  const inp = `width:100%;padding:10px 14px;border-radius:12px;border:2px solid #e5e7eb;font-size:14px;`;
+  const lbl = `font-size:12px;font-weight:700;color:#666;letter-spacing:.5px;margin-bottom:4px;display:block;font-family:'Fredoka One',cursive;`;
+
+  return `
+    <div class="modal-overlay" id="form-modal">
+      <div class="modal-box">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+          <div class="fredoka" style="font-size:22px;color:#333;">${isEdit?"Edit Pin ✏️":"Add New Pin ✨"}</div>
+          ${!isEdit?`<button id="form-open-search" style="padding:7px 14px;border-radius:20px;border:2px solid #6db8f7;background:#e8f4ff;color:#4e9af1;font-size:13px;">🔍 Search DB</button>`:""}
+        </div>
+        <div style="display:flex;flex-direction:column;gap:14px;">
+          <div><label style="${lbl}">PIN NAME</label><input id="f-name" value="${esc(f.name)}" placeholder="e.g. Sorcerer Mickey" style="${inp}"/></div>
+          <div><label style="${lbl}">DESCRIPTION</label><textarea id="f-desc" placeholder="Describe your pin..." style="${inp}height:80px;resize:vertical;">${esc(f.description)}</textarea></div>
+          <div><label style="${lbl}">SERIES / COLLECTION</label><input id="f-series" value="${esc(f.series)}" placeholder="e.g. Walt Disney World 50th" style="${inp}"/></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div><label style="${lbl}">RARITY</label><select id="f-rarity" style="${inp}">${rarOpts}</select></div>
+            <div><label style="${lbl}">CONDITION</label><select id="f-cond" style="${inp}">${conOpts}</select></div>
+          </div>
+          <div><label style="${lbl}">PINPICS URL (optional)</label><input id="f-ppurl" value="${esc(f.pinpicsUrl||"")}" placeholder="https://pinpics.com/pins/..." style="${inp}"/></div>
+          <div><label style="${lbl}">CARD COLOR</label><div style="display:flex;gap:10px;flex-wrap:wrap;">${colorDots}</div></div>
+          <div><label style="${lbl}">EMOJI</label><div style="display:flex;flex-wrap:wrap;gap:6px;">${emojiPicker}</div></div>
+          <div>
+            <label style="${lbl}">PHOTO / IMAGE</label>
+            <div style="display:flex;gap:10px;align-items:center;margin-bottom:8px;">
+              ${photoPreview}
+              <button id="f-upload-btn" style="padding:8px 16px;border-radius:10px;border:none;background:#6db8f7;color:white;font-size:14px;">${f.photo?"Change Photo":"Upload Photo"}</button>
+              ${f.photo?`<button id="f-remove-photo" style="padding:8px 16px;border-radius:10px;border:none;background:#ff6b6b;color:white;font-size:14px;">Remove</button>`:""}
+            </div>
+            <input id="f-photo-url" value="${f.photo && f.photo.startsWith("http") ? esc(f.photo) : ""}" placeholder="Or paste an image URL..." style="${inp}font-size:12px;"/>
+            <input id="f-file-input" type="file" accept="image/*" style="display:none;"/>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:22px;">
+          <button id="form-cancel-btn" style="flex:1;padding:10px 0;border-radius:10px;border:none;background:#eee;color:#666;font-size:14px;">Cancel</button>
+          <button id="form-save-btn" style="flex:2;padding:10px 0;border-radius:10px;border:none;background:#4e9af1;color:white;font-size:15px;">${isEdit?"Save Changes":"Add to Collection"}</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function esc(s) { return (s||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;"); }
+
+// ── Event Binding ─────────────────────────────────────────────────────────────
+function bindAppEvents() {
+  // Flip cards
+  document.querySelectorAll(".card-scene").forEach(scene => {
+    scene.addEventListener("click", e => {
+      if (e.target.closest("button") || e.target.closest("a")) return;
+      const id = scene.dataset.id;
+      const inner = document.getElementById("card-inner-" + id);
+      if (inner) inner.classList.toggle("flipped");
+    });
+  });
+
+  // Tab switch
+  document.querySelectorAll(".tab-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      state.activeTab = btn.dataset.tab;
+      state.search = ""; state.filterRarity = "All"; state.filterSeries = "All";
+      render();
+    });
+  });
+
+  // Switch user
+  document.getElementById("switch-user-btn")?.addEventListener("click", () => {
+    state.unsub.forEach(u => u()); state.unsub = [];
+    state.screen = "profile"; state.user = null;
+    localStorage.removeItem("pinapp_lastuser");
+    render();
+  });
+
+  // Search / filter
+  document.getElementById("search-input")?.addEventListener("input", e => { state.search = e.target.value; render(); });
+  document.getElementById("rarity-filter")?.addEventListener("change", e => { state.filterRarity = e.target.value; render(); });
+  document.getElementById("series-filter")?.addEventListener("change", e => { state.filterSeries = e.target.value; render(); });
+
+  // Open DB search
+  document.getElementById("open-db-search")?.addEventListener("click", () => {
+    state.showSearch = true; state.searchQuery = ""; state.searchResults = []; state.searchSelected = null; render();
+  });
+  // Open wish search
+  document.getElementById("add-wish-btn")?.addEventListener("click", () => {
+    state.showWishSearch = true; state.searchQuery = ""; state.searchResults = []; state.searchSelected = null; render();
+  });
+  // Add pin form
+  document.getElementById("add-pin-btn")?.addEventListener("click", () => {
+    state.editing = null; state.prefill = null;
+    state.formData = {name:"",description:"",series:"",rarity:"Common",condition:"Mint",photo:null,emoji:"📌",color:"#6db8f7",pinpicsUrl:""};
+    state.showForm = true; render();
+  });
+
+  // Edit buttons
+  document.querySelectorAll(".card-edit-btn").forEach(btn => {
+    btn.addEventListener("click", e => {
+      e.stopPropagation();
+      const pin = state.pins.find(p => p.id === btn.dataset.id);
+      if (pin) { state.editing = pin.id; state.formData = {...pin}; state.showForm = true; render(); }
+    });
+  });
+
+  // Delete buttons
+  document.querySelectorAll(".card-del-btn").forEach(btn => {
+    btn.addEventListener("click", e => {
+      e.stopPropagation();
+      if (confirm("Remove this pin?")) removePin(btn.dataset.id, btn.dataset.col);
+    });
+  });
+
+  // Move to collection
+  document.querySelectorAll(".card-move-btn").forEach(btn => {
+    btn.addEventListener("click", e => {
+      e.stopPropagation();
+      const pin = state.wishlist.find(p => p.id === btn.dataset.id);
+      if (pin) {
+        const newPin = {...pin, id: genId(), condition:"Mint", type:"pin"};
+        delete newPin.owner;
+        savePin(newPin, "pins");
+        removePin(pin.id, "wishlist");
+      }
+    });
+  });
+
+  bindSearchModal();
+  bindFormEvents();
+}
+
+function bindSearchModal() {
+  const forWish = state.showWishSearch;
+
+  document.getElementById("db-search-input")?.addEventListener("input", e => {
+    state.searchQuery = e.target.value;
+    state.searchResults = searchPins(state.searchQuery);
+    state.searchSelected = null;
+    render(); bindSearchModal();
+    // Refocus
+    const inp = document.getElementById("db-search-input");
+    if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+  });
+
+  document.querySelectorAll(".search-result").forEach(el => {
+    el.addEventListener("click", () => {
+      state.searchSelected = PIN_DB.find(p => p.name === el.dataset.name) || null;
+      render(); bindSearchModal();
+    });
+  });
+
+  document.getElementById("search-cancel-btn")?.addEventListener("click", () => {
+    state.showSearch = false; state.showWishSearch = false; render();
+  });
+
+  document.getElementById("search-use-btn")?.addEventListener("click", () => {
+    if (!state.searchSelected) return;
+    const sel = state.searchSelected;
+    const pin = {id:genId(), name:sel.name, description:sel.description, series:sel.series, rarity:sel.rarity, emoji:sel.emoji, condition:"Mint", photo:null, color:"#6db8f7", pinpicsUrl:"", type: forWish?"wish":"pin"};
+    if (forWish) {
+      savePin(pin, "wishlist");
+      state.showWishSearch = false;
+    } else {
+      state.prefill = pin;
+      state.formData = {...pin};
+      state.editing = null;
+      state.showSearch = false;
+      state.showForm = true;
+    }
+    render();
+  });
+
+  // Click outside to close
+  document.getElementById("search-modal")?.addEventListener("click", e => {
+    if (e.target.id === "search-modal") { state.showSearch = false; state.showWishSearch = false; render(); }
+  });
+}
+
+function bindFormEvents() {
+  if (!state.showForm) return;
+  const f = () => state.formData;
+
+  const sync = () => {
+    state.formData.name = document.getElementById("f-name")?.value || "";
+    state.formData.description = document.getElementById("f-desc")?.value || "";
+    state.formData.series = document.getElementById("f-series")?.value || "";
+    state.formData.rarity = document.getElementById("f-rarity")?.value || "Common";
+    state.formData.condition = document.getElementById("f-cond")?.value || "Mint";
+    state.formData.pinpicsUrl = document.getElementById("f-ppurl")?.value || "";
+    const urlVal = document.getElementById("f-photo-url")?.value || "";
+    if (urlVal.startsWith("http")) state.formData.photo = urlVal;
+  };
+
+  ["f-name","f-desc","f-series","f-ppurl"].forEach(id => {
+    document.getElementById(id)?.addEventListener("input", sync);
+  });
+  ["f-rarity","f-cond"].forEach(id => {
+    document.getElementById(id)?.addEventListener("change", sync);
+  });
+  document.getElementById("f-photo-url")?.addEventListener("input", e => {
+    sync();
+    if (e.target.value.startsWith("http")) { state.formData.photo = e.target.value; render(); }
+  });
+
+  document.querySelectorAll(".color-dot").forEach(dot => {
+    dot.addEventListener("click", () => { sync(); state.formData.color = dot.dataset.color; render(); });
+  });
+  document.querySelectorAll(".emoji-pick").forEach(ep => {
+    ep.addEventListener("click", () => { sync(); state.formData.emoji = ep.dataset.emoji; render(); });
+  });
+
+  document.getElementById("f-upload-btn")?.addEventListener("click", () => document.getElementById("f-file-input")?.click());
+  document.getElementById("f-remove-photo")?.addEventListener("click", () => { sync(); state.formData.photo = null; render(); });
+  document.getElementById("f-file-input")?.addEventListener("change", e => {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => { sync(); state.formData.photo = ev.target.result; render(); };
+    reader.readAsDataURL(file);
+  });
+
+  document.getElementById("form-open-search")?.addEventListener("click", () => {
+    sync(); state.showSearch = true; state.showForm = false; state.searchQuery = ""; state.searchResults = []; state.searchSelected = null; render();
+  });
+
+  document.getElementById("form-cancel-btn")?.addEventListener("click", () => {
+    state.showForm = false; state.editing = null; state.prefill = null; state.formData = null; render();
+  });
+
+  document.getElementById("form-save-btn")?.addEventListener("click", () => {
+    sync();
+    if (!state.formData.name.trim()) return;
+    const pin = {...state.formData, id: state.editing || genId(), type:"pin"};
+    savePin(pin, "pins");
+    state.showForm = false; state.editing = null; state.prefill = null; state.formData = null;
+    render();
+  });
+
+  document.getElementById("form-modal")?.addEventListener("click", e => {
+    if (e.target.id === "form-modal") { state.showForm = false; state.editing = null; state.prefill = null; state.formData = null; render(); }
+  });
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+async function boot() {
+  render();
+  if (state.user) subscribeUser(state.user);
+
+  // Seed sample pins for Rey if first launch
+  const reyKey = "pinapp_seeded_Rey";
+  if (!localStorage.getItem(reyKey)) {
+    localStorage.setItem(reyKey, "1");
+    // Subscribe first, then seed after short delay
+    setTimeout(async () => {
+      if (state.pins.length === 0 && state.user === "Rey") {
+        for (const pin of SAMPLE_PINS) {
+          await savePin({...pin, type:"pin"}, "pins");
+        }
+      }
+    }, 2000);
+  }
+}
+
+boot();
+</script>
+
+<div id="root" style="position:relative;"></div>
+</body>
+</html>
