@@ -25,6 +25,9 @@
   @keyframes fabPulse { 0%,100% { box-shadow:0 4px 20px rgba(124,58,237,0.4); } 50% { box-shadow:0 4px 30px rgba(124,58,237,0.7), 0 0 40px rgba(124,58,237,0.2); } }
   .fab-glow { animation: fabPulse 3s ease-in-out infinite; }
   @keyframes starDrift { 0% { opacity:0.3; } 50% { opacity:1; } 100% { opacity:0.3; } }
+  @keyframes profilePop { from { opacity:0; transform:scale(0.85) translateY(30px); } to { opacity:1; transform:scale(1) translateY(0); } }
+  .profile-pop { animation: profilePop 0.5s cubic-bezier(.34,1.56,.64,1) both; }
+  .profile-pop:nth-child(2) { animation-delay: 0.1s; }
   ::-webkit-scrollbar { width:6px; } ::-webkit-scrollbar-track { background:transparent; } ::-webkit-scrollbar-thumb { background:#7C3AED44; border-radius:3px; }
   .pin-card { transition: transform 0.3s cubic-bezier(.34,1.56,.64,1), box-shadow 0.3s ease; cursor:pointer; }
   .pin-card:hover { transform: translateY(-6px) scale(1.02); box-shadow: 0 12px 35px rgba(60,30,90,0.15), 0 0 0 2px rgba(180,160,210,0.3) !important; }
@@ -32,6 +35,10 @@
   .fab-btn:hover { transform: scale(1.15) rotate(90deg); }
   .magic-btn { transition: transform 0.15s; }
   .magic-btn:active { transform: scale(0.95); }
+  .profile-card { transition: transform 0.3s cubic-bezier(.34,1.56,.64,1), box-shadow 0.3s; cursor: pointer; }
+  .profile-card:hover { transform: translateY(-6px) scale(1.03); box-shadow: 0 16px 40px rgba(124,58,237,0.3) !important; }
+  .switch-btn { transition: transform 0.2s, background 0.2s; }
+  .switch-btn:hover { transform: scale(1.05); }
   input:focus, textarea:focus, select:focus { border-color: #7C3AED !important; box-shadow: 0 0 0 3px rgba(124,58,237,0.15) !important; outline:none; }
   select option { background: #2D1654; color: #F5F0FF; }
 </style>
@@ -43,18 +50,48 @@ const PIN_TYPES = ["Trading Pin","Limited Edition","Open Edition","Hidden Mickey
 const RARITY_LEVELS = ["Common","Uncommon","Rare","Super Rare","Grail"];
 const RARITY_COLORS = {Common:"#7B8FA1",Uncommon:"#5BA67D",Rare:"#4A90D9","Super Rare":"#9B59B6",Grail:"#F1C40F"};
 const RARITY_ICONS = {Common:"\u26AA",Uncommon:"\uD83D\uDFE2",Rare:"\uD83D\uDD35","Super Rare":"\uD83D\uDFE3",Grail:"\uD83D\uDC51"};
-const SK = { collection:"disney-pins-collection", wishlist:"disney-pins-wishlist" };
 
-let state = { collection:[], wishlist:[], tab:"collection", showForm:false, editingPin:null, search:"", filterRarity:"All" };
+const PROFILES = [
+  { id: "rey", name: "Rey", icon: "\uD83E\uDD34", color: "#7C3AED", accent: "#5B21B6" },
+  { id: "jessie", name: "Jessie", icon: "\uD83D\uDC78", color: "#EC4899", accent: "#BE185D" },
+];
+
+function storageKeys(profileId) {
+  return { collection: `pins-${profileId}-collection`, wishlist: `pins-${profileId}-wishlist` };
+}
+
+let state = { profile: null, collection:[], wishlist:[], tab:"collection", showForm:false, editingPin:null, search:"", filterRarity:"All" };
 
 function genId(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
-function save(key,data){ try{ localStorage.setItem(key,JSON.stringify(data)); }catch(e){} }
+function save(key,data){ try{ localStorage.setItem(key,JSON.stringify(data)); }catch(e){ console.error('Storage full or error',e); } }
 function load(key){ try{ const d=localStorage.getItem(key); return d?JSON.parse(d):[]; }catch(e){ return []; } }
 
-function init(){
-  state.collection = load(SK.collection);
-  state.wishlist = load(SK.wishlist);
+function selectProfile(profileId){
+  state.profile = PROFILES.find(p=>p.id===profileId);
+  const sk = storageKeys(profileId);
+  state.collection = load(sk.collection);
+  state.wishlist = load(sk.wishlist);
+  state.tab = "collection";
+  state.search = "";
+  state.filterRarity = "All";
+  state.showForm = false;
+  state.editingPin = null;
+  localStorage.setItem('pins-last-profile', profileId);
   render();
+}
+
+function switchProfile(){
+  state.profile = null;
+  render();
+}
+
+function init(){
+  const last = localStorage.getItem('pins-last-profile');
+  if(last && PROFILES.find(p=>p.id===last)){
+    selectProfile(last);
+  } else {
+    render();
+  }
 }
 
 function currentList(){ return state.tab==="collection"?state.collection:state.wishlist; }
@@ -79,7 +116,8 @@ function savePin(pin){
   const list = state[key];
   const idx = list.findIndex(p=>p.id===pin.id);
   if(idx>=0) list[idx]=pin; else list.unshift(pin);
-  save(SK[key],list);
+  const sk = storageKeys(state.profile.id);
+  save(sk[key],list);
   closeForm();
 }
 
@@ -87,11 +125,13 @@ function deletePin(id){
   if(!confirm("Delete this pin?")) return;
   const key = state.tab==="collection"?"collection":"wishlist";
   state[key] = state[key].filter(p=>p.id!==id);
-  save(SK[key],state[key]);
+  const sk = storageKeys(state.profile.id);
+  save(sk[key],state[key]);
   render();
 }
 
 function movePin(pin){
+  const sk = storageKeys(state.profile.id);
   if(state.tab==="collection"){
     state.collection=state.collection.filter(p=>p.id!==pin.id);
     state.wishlist.unshift(pin);
@@ -99,28 +139,110 @@ function movePin(pin){
     state.wishlist=state.wishlist.filter(p=>p.id!==pin.id);
     state.collection.unshift(pin);
   }
-  save(SK.collection,state.collection);
-  save(SK.wishlist,state.wishlist);
+  save(sk.collection,state.collection);
+  save(sk.wishlist,state.wishlist);
   render();
 }
 
 function resetAll(){
-  if(!confirm("This will delete ALL your pin data. Are you sure?")) return;
+  if(!confirm("This will delete ALL pin data for "+state.profile.name+". Are you sure?")) return;
   state.collection=[]; state.wishlist=[];
-  localStorage.removeItem(SK.collection);
-  localStorage.removeItem(SK.wishlist);
+  const sk = storageKeys(state.profile.id);
+  localStorage.removeItem(sk.collection);
+  localStorage.removeItem(sk.wishlist);
   render();
 }
 
 function esc(s){ const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
 
+/* ── Image compression ── */
+function compressImage(file, maxWidth, quality) {
+  return new Promise((resolve, reject) => {
+    maxWidth = maxWidth || 800;
+    quality = quality || 0.7;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      const img = new Image();
+      img.onload = function() {
+        const canvas = document.createElement('canvas');
+        let w = img.width, h = img.height;
+        if(w > maxWidth) { h = Math.round(h * maxWidth / w); w = maxWidth; }
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        let result = canvas.toDataURL('image/jpeg', quality);
+        // If still too big, reduce further
+        if(result.length > 500000 && quality > 0.3) {
+          const ctx2 = canvas.getContext('2d');
+          ctx2.drawImage(img, 0, 0, w, h);
+          result = canvas.toDataURL('image/jpeg', 0.4);
+        }
+        if(result.length > 800000) {
+          // Last resort: shrink dimensions more
+          const smallW = Math.round(w * 0.6);
+          const smallH = Math.round(h * 0.6);
+          canvas.width = smallW;
+          canvas.height = smallH;
+          canvas.getContext('2d').drawImage(img, 0, 0, smallW, smallH);
+          result = canvas.toDataURL('image/jpeg', 0.5);
+        }
+        resolve(result);
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+/* ── Profile Select Screen ── */
+function renderProfileSelect(){
+  const app = document.getElementById('app');
+  let stars='';
+  for(let i=0;i<40;i++){
+    stars+=`<div style="position:fixed;width:${1+Math.random()*3}px;height:${1+Math.random()*3}px;border-radius:50%;background:#fff;left:${Math.random()*100}%;top:${Math.random()*100}%;opacity:${0.2+Math.random()*0.5};animation:starDrift ${2+Math.random()*3}s ease-in-out infinite;animation-delay:${Math.random()*3}s;pointer-events:none"></div>`;
+  }
+
+  app.innerHTML = `
+  ${stars}
+  <div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;position:relative">
+    <div style="text-align:center;margin-bottom:40px">
+      <div style="font-size:12px;color:#C4B5FD;letter-spacing:4px;font-weight:700;text-transform:uppercase;margin-bottom:8px;font-family:'Quicksand',sans-serif">\u2726 Disney Pin \u2726</div>
+      <h1 style="margin:0;font-family:'Fredoka',sans-serif;font-size:44px;font-weight:700;background:linear-gradient(135deg,#F5F0FF,#E9D5FF,#FDE68A,#F5F0FF);-webkit-background-clip:text;-webkit-text-fill-color:transparent;line-height:1.1">Pin Vault</h1>
+      <p style="margin:12px 0 0;color:#A78BFA;font-size:15px;font-weight:600">Who's collecting today?</p>
+    </div>
+    <div style="display:flex;gap:20px;flex-wrap:wrap;justify-content:center">
+      ${PROFILES.map((p,i) => {
+        const count = load(storageKeys(p.id).collection).length;
+        const wl = load(storageKeys(p.id).wishlist).length;
+        return `
+        <div class="profile-card profile-pop" onclick="selectProfile('${p.id}')" style="background:linear-gradient(145deg,rgba(255,255,255,0.1),rgba(255,255,255,0.03));border:2px solid ${p.color}44;border-radius:28px;padding:36px 40px;text-align:center;min-width:160px;box-shadow:0 8px 30px rgba(0,0,0,0.2);backdrop-filter:blur(10px)">
+          <div style="font-size:64px;margin-bottom:12px">${p.icon}</div>
+          <h2 style="margin:0;font-family:'Fredoka',sans-serif;font-size:26px;color:#fff;font-weight:700">${p.name}</h2>
+          <div style="margin-top:10px;display:flex;gap:12px;justify-content:center">
+            <span style="font-size:11px;color:#C4B5FD;font-weight:700;font-family:'Quicksand',sans-serif">\uD83D\uDCCC ${count} pins</span>
+            <span style="font-size:11px;color:#C4B5FD;font-weight:700;font-family:'Quicksand',sans-serif">\u2B50 ${wl} wished</span>
+          </div>
+          <div style="margin-top:16px;padding:8px 24px;background:linear-gradient(135deg,${p.color},${p.accent});border-radius:14px;color:#fff;font-size:13px;font-weight:800;font-family:'Fredoka',sans-serif;box-shadow:0 4px 15px ${p.color}44">Open Vault</div>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
+}
+
+/* ── Main App Render ── */
 function render(){
+  if(!state.profile) { renderProfileSelect(); return; }
+
   const app=document.getElementById('app');
+  const prof = state.profile;
   const list=filtered();
   const limited=state.collection.filter(p=>p.isLimited).length;
   const grails=state.collection.filter(p=>p.rarity==="Grail").length;
   const stats=[
-    {label:"Collection",value:state.collection.length,icon:"\uD83D\uDCCC",color:"#7C3AED"},
+    {label:"Collection",value:state.collection.length,icon:"\uD83D\uDCCC",color:prof.color},
     {label:"Wish List",value:state.wishlist.length,icon:"\u2B50",color:"#F59E0B"},
     {label:"Limited Ed.",value:limited,icon:"\u2728",color:"#EC4899"},
     {label:"Grails",value:grails,icon:"\uD83D\uDC51",color:"#F1C40F"},
@@ -139,7 +261,7 @@ function render(){
 
   let html = `
   <!-- HEADER -->
-  <div style="background:linear-gradient(135deg,#2D1654 0%,#4A1D8A 50%,#2D1654 100%);padding:32px 20px 24px;position:relative;overflow:hidden;border-bottom:2px solid rgba(124,58,237,0.3)">
+  <div style="background:linear-gradient(135deg,#2D1654 0%,#4A1D8A 50%,#2D1654 100%);padding:28px 20px 22px;position:relative;overflow:hidden;border-bottom:2px solid ${prof.color}44">
     <div style="position:absolute;inset:0;overflow:hidden;pointer-events:none">${sparkles}</div>
     ${stars}
     <svg viewBox="0 0 400 180" style="position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:500px;opacity:0.08;color:#fff" fill="currentColor">
@@ -151,9 +273,18 @@ function render(){
       <rect x="268" y="110" width="10" height="35" rx="1"/><path d="M105 145 L295 145 L305 180 L95 180 Z"/>
       <rect x="187" y="120" width="26" height="60" rx="13"/>
     </svg>
-    <div style="max-width:800px;margin:0 auto;position:relative;z-index:2;text-align:center">
-      <div style="font-size:12px;color:#C4B5FD;letter-spacing:4px;font-weight:700;text-transform:uppercase;margin-bottom:6px;font-family:'Quicksand',sans-serif">\u2726 Disney Pin \u2726</div>
-      <h1 style="margin:0;font-family:'Fredoka',sans-serif;font-size:40px;font-weight:700;background:linear-gradient(135deg,#F5F0FF,#E9D5FF,#FDE68A,#F5F0FF);-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:-0.5px;line-height:1.1">Pin Vault</h1>
+    <div style="max-width:800px;margin:0 auto;position:relative;z-index:2">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div style="text-align:left">
+          <div style="font-size:11px;color:#C4B5FD;letter-spacing:3px;font-weight:700;text-transform:uppercase;margin-bottom:4px;font-family:'Quicksand',sans-serif">\u2726 Disney Pin \u2726</div>
+          <h1 style="margin:0;font-family:'Fredoka',sans-serif;font-size:34px;font-weight:700;background:linear-gradient(135deg,#F5F0FF,#E9D5FF,#FDE68A,#F5F0FF);-webkit-background-clip:text;-webkit-text-fill-color:transparent;line-height:1.1">Pin Vault</h1>
+        </div>
+        <button class="switch-btn" onclick="switchProfile()" style="display:flex;align-items:center;gap:8px;padding:8px 16px;background:rgba(255,255,255,0.1);border:2px solid ${prof.color}66;border-radius:16px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:'Quicksand',sans-serif;backdrop-filter:blur(4px)">
+          <span style="font-size:22px">${prof.icon}</span>
+          <span>${prof.name}</span>
+          <span style="font-size:10px;color:#A78BFA">\u25BE</span>
+        </button>
+      </div>
     </div>
   </div>
 
@@ -171,13 +302,13 @@ function render(){
 
     <!-- TABS -->
     <div style="display:flex;margin-bottom:18px;background:rgba(124,58,237,0.15);border-radius:16px;padding:4px;border:1px solid rgba(124,58,237,0.2)">
-      <button onclick="setTab('collection')" style="flex:1;padding:11px 16px;border:none;border-radius:13px;font-size:14px;font-weight:800;cursor:pointer;font-family:'Fredoka',sans-serif;background:${state.tab==='collection'?'linear-gradient(135deg,#7C3AED,#5B21B6)':'transparent'};color:${state.tab==='collection'?'#fff':'#A78BFA'};box-shadow:${state.tab==='collection'?'0 4px 15px rgba(124,58,237,0.3)':'none'}">📌 Collection</button>
-      <button onclick="setTab('wishlist')" style="flex:1;padding:11px 16px;border:none;border-radius:13px;font-size:14px;font-weight:800;cursor:pointer;font-family:'Fredoka',sans-serif;background:${state.tab==='wishlist'?'linear-gradient(135deg,#7C3AED,#5B21B6)':'transparent'};color:${state.tab==='wishlist'?'#fff':'#A78BFA'};box-shadow:${state.tab==='wishlist'?'0 4px 15px rgba(124,58,237,0.3)':'none'}">⭐ Wish List</button>
+      <button onclick="setTab('collection')" style="flex:1;padding:11px 16px;border:none;border-radius:13px;font-size:14px;font-weight:800;cursor:pointer;font-family:'Fredoka',sans-serif;background:${state.tab==='collection'?`linear-gradient(135deg,${prof.color},${prof.accent})`:'transparent'};color:${state.tab==='collection'?'#fff':'#A78BFA'};box-shadow:${state.tab==='collection'?`0 4px 15px ${prof.color}44`:'none'}">\uD83D\uDCCC Collection</button>
+      <button onclick="setTab('wishlist')" style="flex:1;padding:11px 16px;border:none;border-radius:13px;font-size:14px;font-weight:800;cursor:pointer;font-family:'Fredoka',sans-serif;background:${state.tab==='wishlist'?`linear-gradient(135deg,${prof.color},${prof.accent})`:'transparent'};color:${state.tab==='wishlist'?'#fff':'#A78BFA'};box-shadow:${state.tab==='wishlist'?`0 4px 15px ${prof.color}44`:'none'}">\u2B50 Wish List</button>
     </div>
 
     <!-- SEARCH -->
     <div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap">
-      <input id="searchInput" placeholder="🔍 Search pins..." value="${esc(state.search)}" oninput="setSearch(this.value)" style="flex:1;min-width:180px;padding:11px 16px;border:2px solid rgba(124,58,237,0.25);border-radius:14px;font-size:14px;font-family:'Quicksand',sans-serif;font-weight:600;color:#F5F0FF;background:rgba(45,22,84,0.6);outline:none">
+      <input id="searchInput" placeholder="\uD83D\uDD0D Search pins..." value="${esc(state.search)}" oninput="setSearch(this.value)" style="flex:1;min-width:180px;padding:11px 16px;border:2px solid rgba(124,58,237,0.25);border-radius:14px;font-size:14px;font-family:'Quicksand',sans-serif;font-weight:600;color:#F5F0FF;background:rgba(45,22,84,0.6);outline:none">
       <select onchange="setFilter(this.value)" style="padding:11px 14px;border:2px solid rgba(124,58,237,0.25);border-radius:14px;font-size:14px;font-family:'Quicksand',sans-serif;font-weight:600;color:#F5F0FF;background:rgba(45,22,84,0.6);outline:none;cursor:pointer">
         <option value="All" ${state.filterRarity==='All'?'selected':''}>All Rarities</option>
         ${RARITY_LEVELS.map(r=>`<option value="${r}" ${state.filterRarity===r?'selected':''}>${RARITY_ICONS[r]} ${r}</option>`).join('')}
@@ -187,43 +318,44 @@ function render(){
     <!-- GRID -->
     ${list.length===0?`
       <div style="text-align:center;padding:60px 20px;color:#A78BFA">
-        <div style="font-size:56px;margin-bottom:12px" class="pin-bounce">${state.tab==='collection'?'🏰':'⭐'}</div>
+        <div style="font-size:56px;margin-bottom:12px" class="pin-bounce">${state.tab==='collection'?'\uD83C\uDFF0':'\u2B50'}</div>
         <p style="font-size:18px;font-weight:700;margin:0 0 6px;font-family:'Fredoka',sans-serif;color:#C4B5FD">${state.search||state.filterRarity!=='All'?'No pins match your search':state.tab==='collection'?'Your vault is empty':'Your wish list awaits'}</p>
-        <p style="font-size:13px;margin:0;color:#7C6BAE">Tap the magic button below to add your first pin ✨</p>
+        <p style="font-size:13px;margin:0;color:#7C6BAE">Tap the magic button below to add your first pin \u2728</p>
       </div>
     `:`
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:16px">
         ${list.map((pin,i)=>{
           const rc=RARITY_COLORS[pin.rarity]||'#7B8FA1';
           const ri=RARITY_ICONS[pin.rarity]||'';
+          const listKey = state.tab==='collection'?'collection':'wishlist';
           return `
           <div class="pin-card pin-card-appear" style="background:linear-gradient(145deg,#ffffff 0%,#f8f4ff 100%);border-radius:20px;overflow:hidden;box-shadow:0 4px 20px rgba(60,30,90,0.08),0 1px 3px rgba(60,30,90,0.06);border:1px solid rgba(180,160,210,0.2);position:relative;animation-delay:${i*0.06}s" onclick="toggleCard('${pin.id}')">
-            <div style="position:absolute;top:8px;right:8px;font-size:14px;z-index:2;opacity:0.7" class="twinkle">✦</div>
+            <div style="position:absolute;top:8px;right:8px;font-size:14px;z-index:2;opacity:0.7" class="twinkle">\u2726</div>
             ${pin.image?`
               <div style="width:100%;aspect-ratio:1;overflow:hidden;background:#f0eaf8;position:relative">
-                <img src="${pin.image}" alt="" style="width:100%;height:100%;object-fit:cover">
+                <img src="${pin.image}" alt="" style="width:100%;height:100%;object-fit:cover" loading="lazy">
                 <div style="position:absolute;bottom:0;left:0;right:0;height:40px;background:linear-gradient(transparent,rgba(255,255,255,0.9))"></div>
               </div>
             `:`
               <div style="width:100%;aspect-ratio:1;background:linear-gradient(135deg,#E8DAEF 0%,#D4E6F1 50%,#FADBD8 100%);display:flex;align-items:center;justify-content:center;font-size:52px;position:relative">
-                <span class="pin-bounce">📌</span>
+                <span class="pin-bounce">\uD83D\uDCCC</span>
                 <div style="position:absolute;bottom:10px;left:50%;transform:translateX(-50%);font-size:10px;color:#9B8EC4;font-family:'Quicksand',sans-serif;font-weight:600">No Photo Yet</div>
               </div>
             `}
             <div style="padding:14px 16px 16px">
               <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap">
                 <span style="background:linear-gradient(135deg,${rc},${rc}dd);color:#fff;font-size:10px;font-weight:800;padding:3px 10px;border-radius:20px;letter-spacing:0.8px;text-transform:uppercase;font-family:'Quicksand',sans-serif;box-shadow:0 2px 8px ${rc}44">${ri} ${pin.rarity}</span>
-                ${pin.isLimited?`<span style="background:linear-gradient(135deg,#FFF8E1,#FFF3C4);color:#B7791F;font-size:10px;font-weight:800;padding:3px 10px;border-radius:20px;letter-spacing:0.5px;font-family:'Quicksand',sans-serif;border:1px solid #F6E05E">✨ LE ${esc(pin.leNumber)||'?'}</span>`:''}
+                ${pin.isLimited?`<span style="background:linear-gradient(135deg,#FFF8E1,#FFF3C4);color:#B7791F;font-size:10px;font-weight:800;padding:3px 10px;border-radius:20px;letter-spacing:0.5px;font-family:'Quicksand',sans-serif;border:1px solid #F6E05E">\u2728 LE ${esc(pin.leNumber)||'?'}</span>`:''}
               </div>
               <h3 style="margin:0;font-size:15px;font-weight:700;color:#2D1B4E;font-family:'Fredoka',sans-serif;line-height:1.3">${esc(pin.name)||'Unnamed Pin'}</h3>
               <p style="margin:3px 0 0;font-size:11px;color:#9B8EC4;font-family:'Quicksand',sans-serif;font-weight:600">${esc(pin.type)}</p>
               <div id="detail-${pin.id}" style="display:none;margin-top:12px;padding-top:12px;border-top:2px dashed #E8DAEF">
-                ${pin.pinpicsUrl?`<a href="${esc(pin.pinpicsUrl)}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:4px;font-size:12px;color:#7C3AED;margin-bottom:8px;font-family:'Quicksand',sans-serif;text-decoration:none;font-weight:700" onclick="event.stopPropagation()">🔗 View on PinPics</a>`:''}
+                ${pin.pinpicsUrl?`<a href="${esc(pin.pinpicsUrl)}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:4px;font-size:12px;color:#7C3AED;margin-bottom:8px;font-family:'Quicksand',sans-serif;text-decoration:none;font-weight:700" onclick="event.stopPropagation()">\uD83D\uDD17 View on PinPics</a>`:''}
                 ${pin.notes?`<p style="font-size:12px;color:#6B5B8D;margin:0 0 10px;font-family:'Quicksand',sans-serif;line-height:1.5;font-style:italic">"${esc(pin.notes)}"</p>`:''}
                 <div style="display:flex;gap:6px;flex-wrap:wrap" onclick="event.stopPropagation()">
-                  <button class="magic-btn" onclick="openForm(state.${state.tab==='collection'?'collection':'wishlist'}.find(p=>p.id==='${pin.id}'))" style="background:#7C3AED;color:#fff;border:none;border-radius:12px;padding:7px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:'Quicksand',sans-serif;box-shadow:0 2px 8px #7C3AED44">✏️ Edit</button>
-                  <button class="magic-btn" onclick="movePin(state.${state.tab==='collection'?'collection':'wishlist'}.find(p=>p.id==='${pin.id}'))" style="background:#2563EB;color:#fff;border:none;border-radius:12px;padding:7px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:'Quicksand',sans-serif;box-shadow:0 2px 8px #2563EB44">${state.tab==='collection'?'⭐ Wishlist':'📌 Collection'}</button>
-                  <button class="magic-btn" onclick="deletePin('${pin.id}')" style="background:#DC2626;color:#fff;border:none;border-radius:12px;padding:7px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:'Quicksand',sans-serif;box-shadow:0 2px 8px #DC262644">🗑️ Delete</button>
+                  <button class="magic-btn" onclick="openForm(state.${listKey}.find(p=>p.id==='${pin.id}'))" style="background:${prof.color};color:#fff;border:none;border-radius:12px;padding:7px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:'Quicksand',sans-serif;box-shadow:0 2px 8px ${prof.color}44">\u270F\uFE0F Edit</button>
+                  <button class="magic-btn" onclick="movePin(state.${listKey}.find(p=>p.id==='${pin.id}'))" style="background:#2563EB;color:#fff;border:none;border-radius:12px;padding:7px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:'Quicksand',sans-serif;box-shadow:0 2px 8px #2563EB44">${state.tab==='collection'?'\u2B50 Wishlist':'\uD83D\uDCCC Collection'}</button>
+                  <button class="magic-btn" onclick="deletePin('${pin.id}')" style="background:#DC2626;color:#fff;border:none;border-radius:12px;padding:7px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:'Quicksand',sans-serif;box-shadow:0 2px 8px #DC262644">\uD83D\uDDD1\uFE0F Delete</button>
                 </div>
               </div>
             </div>
@@ -233,12 +365,12 @@ function render(){
     `}
 
     <div style="margin-top:48px;text-align:center">
-      <button onclick="resetAll()" style="background:transparent;border:none;color:#5B4A7A;font-size:11px;cursor:pointer;font-family:'Quicksand',sans-serif;font-weight:600;letter-spacing:0.5px">Reset All Data</button>
+      <button onclick="resetAll()" style="background:transparent;border:none;color:#5B4A7A;font-size:11px;cursor:pointer;font-family:'Quicksand',sans-serif;font-weight:600;letter-spacing:0.5px">Reset ${esc(prof.name)}'s Data</button>
     </div>
   </div>
 
   <!-- FAB -->
-  <button class="fab-glow fab-btn" onclick="openForm(null)" style="position:fixed;bottom:24px;right:24px;width:60px;height:60px;border-radius:50%;background:linear-gradient(135deg,#7C3AED,#5B21B6);color:#FDE68A;border:3px solid rgba(253,230,138,0.3);font-size:28px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:100">+</button>
+  <button class="fab-glow fab-btn" onclick="openForm(null)" style="position:fixed;bottom:24px;right:24px;width:60px;height:60px;border-radius:50%;background:linear-gradient(135deg,${prof.color},${prof.accent});color:#FDE68A;border:3px solid rgba(253,230,138,0.3);font-size:28px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:100">+</button>
   `;
 
   // Modal
@@ -247,53 +379,54 @@ function render(){
     html += `
     <div id="modalOverlay" onclick="if(event.target===this)closeForm()" style="position:fixed;inset:0;background:rgba(45,27,78,0.55);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;z-index:1000;padding:16px">
       <div class="modal-pop" style="background:linear-gradient(180deg,#ffffff 0%,#f8f4ff 100%);border-radius:24px;padding:28px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;box-shadow:0 25px 80px rgba(45,27,78,0.3),0 0 0 1px rgba(180,160,210,0.2);position:relative">
-        <div style="position:absolute;top:-14px;left:50%;transform:translateX(-50%);font-size:30px" class="twinkle">🪄</div>
-        <h2 style="margin:0 0 20px;font-family:'Fredoka',sans-serif;color:#2D1B4E;font-size:24px;text-align:center">${state.editingPin?'Edit Pin ✨':'Add New Pin ✨'}</h2>
+        <div style="position:absolute;top:-14px;left:50%;transform:translateX(-50%);font-size:30px" class="twinkle">\uD83E\uDE84</div>
+        <h2 style="margin:0 0 20px;font-family:'Fredoka',sans-serif;color:#2D1B4E;font-size:24px;text-align:center">${state.editingPin?'Edit Pin \u2728':'Add New Pin \u2728'}</h2>
         <div style="display:flex;flex-direction:column;gap:14px">
           <div>
-            <label style="display:block;font-size:11px;font-weight:800;color:#7C3AED;margin-bottom:5px;font-family:'Quicksand',sans-serif;letter-spacing:1px;text-transform:uppercase">Pin Name *</label>
+            <label style="display:block;font-size:11px;font-weight:800;color:${prof.color};margin-bottom:5px;font-family:'Quicksand',sans-serif;letter-spacing:1px;text-transform:uppercase">Pin Name *</label>
             <input id="f-name" value="${esc(p.name)}" placeholder="e.g. Marie Brush of Magic" style="width:100%;padding:11px 14px;border:2px solid #E8DAEF;border-radius:14px;font-size:14px;font-family:'Quicksand',sans-serif;color:#2D1B4E;background:#FDFAFF;outline:none;box-sizing:border-box">
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
             <div>
-              <label style="display:block;font-size:11px;font-weight:800;color:#7C3AED;margin-bottom:5px;font-family:'Quicksand',sans-serif;letter-spacing:1px;text-transform:uppercase">Pin Type</label>
+              <label style="display:block;font-size:11px;font-weight:800;color:${prof.color};margin-bottom:5px;font-family:'Quicksand',sans-serif;letter-spacing:1px;text-transform:uppercase">Pin Type</label>
               <select id="f-type" style="width:100%;padding:11px 14px;border:2px solid #E8DAEF;border-radius:14px;font-size:14px;font-family:'Quicksand',sans-serif;color:#2D1B4E;background:#FDFAFF;outline:none;cursor:pointer;box-sizing:border-box">
                 ${PIN_TYPES.map(t=>`<option ${p.type===t?'selected':''}>${t}</option>`).join('')}
               </select>
             </div>
             <div>
-              <label style="display:block;font-size:11px;font-weight:800;color:#7C3AED;margin-bottom:5px;font-family:'Quicksand',sans-serif;letter-spacing:1px;text-transform:uppercase">Rarity</label>
+              <label style="display:block;font-size:11px;font-weight:800;color:${prof.color};margin-bottom:5px;font-family:'Quicksand',sans-serif;letter-spacing:1px;text-transform:uppercase">Rarity</label>
               <select id="f-rarity" style="width:100%;padding:11px 14px;border:2px solid #E8DAEF;border-radius:14px;font-size:14px;font-family:'Quicksand',sans-serif;color:#2D1B4E;background:#FDFAFF;outline:none;cursor:pointer;box-sizing:border-box">
                 ${RARITY_LEVELS.map(r=>`<option value="${r}" ${p.rarity===r?'selected':''}>${RARITY_ICONS[r]} ${r}</option>`).join('')}
               </select>
             </div>
           </div>
           <div>
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;font-weight:800;color:#7C3AED;font-family:'Quicksand',sans-serif">
-              <input type="checkbox" id="f-limited" ${p.isLimited?'checked':''} onchange="document.getElementById('le-row').style.display=this.checked?'block':'none'" style="width:20px;height:20px;accent-color:#7C3AED">
-              <span>Limited Edition ✨</span>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;font-weight:800;color:${prof.color};font-family:'Quicksand',sans-serif">
+              <input type="checkbox" id="f-limited" ${p.isLimited?'checked':''} onchange="document.getElementById('le-row').style.display=this.checked?'block':'none'" style="width:20px;height:20px;accent-color:${prof.color}">
+              <span>Limited Edition \u2728</span>
             </label>
             <div id="le-row" style="display:${p.isLimited?'block':'none'};margin-top:8px">
               <input id="f-le" value="${esc(p.leNumber)}" placeholder="Edition size, e.g. 3750" style="width:100%;padding:11px 14px;border:2px solid #E8DAEF;border-radius:14px;font-size:14px;font-family:'Quicksand',sans-serif;color:#2D1B4E;background:#FDFAFF;outline:none;box-sizing:border-box">
             </div>
           </div>
           <div>
-            <label style="display:block;font-size:11px;font-weight:800;color:#7C3AED;margin-bottom:5px;font-family:'Quicksand',sans-serif;letter-spacing:1px;text-transform:uppercase">PinPics URL</label>
+            <label style="display:block;font-size:11px;font-weight:800;color:${prof.color};margin-bottom:5px;font-family:'Quicksand',sans-serif;letter-spacing:1px;text-transform:uppercase">PinPics URL</label>
             <input id="f-url" value="${esc(p.pinpicsUrl)}" placeholder="https://pinpics.com/..." style="width:100%;padding:11px 14px;border:2px solid #E8DAEF;border-radius:14px;font-size:14px;font-family:'Quicksand',sans-serif;color:#2D1B4E;background:#FDFAFF;outline:none;box-sizing:border-box">
           </div>
           <div>
-            <label style="display:block;font-size:11px;font-weight:800;color:#7C3AED;margin-bottom:5px;font-family:'Quicksand',sans-serif;letter-spacing:1px;text-transform:uppercase">Pin Photo</label>
-            <div id="f-preview">${p.image?`<div style="margin-bottom:8px;position:relative;display:inline-block"><img src="${p.image}" style="width:100px;height:100px;object-fit:cover;border-radius:14px;border:3px solid #E8DAEF"><button onclick="clearImage()" style="position:absolute;top:-6px;right:-6px;width:24px;height:24px;border-radius:50%;background:#DC2626;color:#fff;border:2px solid #fff;cursor:pointer;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center">✕</button></div>`:''}</div>
-            <button onclick="document.getElementById('f-file').click()" style="display:block;width:100%;padding:14px;border:2px dashed #C4B5FD;border-radius:14px;background:linear-gradient(135deg,#F5F0FF,#EDE9FE);color:#7C3AED;font-size:13px;cursor:pointer;font-family:'Quicksand',sans-serif;font-weight:700;box-sizing:border-box">📷 ${p.image?'Change Photo':'Upload Photo'} (max 2MB)</button>
+            <label style="display:block;font-size:11px;font-weight:800;color:${prof.color};margin-bottom:5px;font-family:'Quicksand',sans-serif;letter-spacing:1px;text-transform:uppercase">Pin Photo</label>
+            <div id="f-preview">${p.image?`<div style="margin-bottom:8px;position:relative;display:inline-block"><img src="${p.image}" style="width:100px;height:100px;object-fit:cover;border-radius:14px;border:3px solid #E8DAEF"><button onclick="clearImage()" style="position:absolute;top:-6px;right:-6px;width:24px;height:24px;border-radius:50%;background:#DC2626;color:#fff;border:2px solid #fff;cursor:pointer;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center">\u2715</button></div>`:''}</div>
+            <button onclick="document.getElementById('f-file').click()" style="display:block;width:100%;padding:14px;border:2px dashed #C4B5FD;border-radius:14px;background:linear-gradient(135deg,#F5F0FF,#EDE9FE);color:${prof.color};font-size:13px;cursor:pointer;font-family:'Quicksand',sans-serif;font-weight:700;box-sizing:border-box">\uD83D\uDCF7 ${p.image?'Change Photo':'Upload Photo'} (auto-compressed)</button>
             <input type="file" id="f-file" accept="image/*" style="display:none" onchange="handleFileUpload(this)">
+            <div id="compress-status" style="font-size:11px;color:#9B8EC4;margin-top:6px;font-family:'Quicksand',sans-serif;text-align:center"></div>
           </div>
           <div>
-            <label style="display:block;font-size:11px;font-weight:800;color:#7C3AED;margin-bottom:5px;font-family:'Quicksand',sans-serif;letter-spacing:1px;text-transform:uppercase">Notes</label>
+            <label style="display:block;font-size:11px;font-weight:800;color:${prof.color};margin-bottom:5px;font-family:'Quicksand',sans-serif;letter-spacing:1px;text-transform:uppercase">Notes</label>
             <textarea id="f-notes" placeholder="Any extra details..." style="width:100%;padding:11px 14px;border:2px solid #E8DAEF;border-radius:14px;font-size:14px;font-family:'Quicksand',sans-serif;color:#2D1B4E;background:#FDFAFF;outline:none;min-height:70px;resize:vertical;box-sizing:border-box">${esc(p.notes)}</textarea>
           </div>
         </div>
         <div style="display:flex;gap:10px;margin-top:22px">
-          <button onclick="submitForm()" style="flex:1;padding:13px;background:linear-gradient(135deg,#7C3AED,#5B21B6);color:#fff;border:none;border-radius:14px;font-size:15px;font-weight:800;cursor:pointer;font-family:'Fredoka',sans-serif;box-shadow:0 4px 15px rgba(124,58,237,0.3)">${state.editingPin?'Save Changes 🪄':'Add to Vault ✨'}</button>
+          <button onclick="submitForm()" style="flex:1;padding:13px;background:linear-gradient(135deg,${prof.color},${prof.accent});color:#fff;border:none;border-radius:14px;font-size:15px;font-weight:800;cursor:pointer;font-family:'Fredoka',sans-serif;box-shadow:0 4px 15px ${prof.color}44">${state.editingPin?'Save Changes \uD83E\uDE84':'Add to Vault \u2728'}</button>
           <button onclick="closeForm()" style="padding:13px 20px;background:transparent;color:#9B8EC4;border:2px solid #E8DAEF;border-radius:14px;font-size:15px;font-weight:700;cursor:pointer;font-family:'Quicksand',sans-serif">Cancel</button>
         </div>
       </div>
@@ -305,23 +438,33 @@ function render(){
 
 let formImageData = '';
 
-function handleFileUpload(input){
+async function handleFileUpload(input){
   const file = input.files[0];
   if(!file) return;
-  if(file.size > 2*1024*1024){ alert('Image must be under 2MB.'); return; }
-  const reader = new FileReader();
-  reader.onload = function(e){
-    formImageData = e.target.result;
+  const statusEl = document.getElementById('compress-status');
+
+  const originalSize = (file.size / 1024 / 1024).toFixed(1);
+  if(statusEl) statusEl.textContent = `Compressing ${originalSize}MB photo...`;
+
+  try {
+    formImageData = await compressImage(file, 800, 0.7);
+    const compressedSize = (formImageData.length / 1024 / 1024).toFixed(2);
+    if(statusEl) statusEl.innerHTML = `\u2705 Compressed: ${originalSize}MB \u2192 ${compressedSize}MB`;
+
     const preview = document.getElementById('f-preview');
-    preview.innerHTML = `<div style="margin-bottom:8px;position:relative;display:inline-block"><img src="${formImageData}" style="width:100px;height:100px;object-fit:cover;border-radius:14px;border:3px solid #E8DAEF"><button onclick="clearImage()" style="position:absolute;top:-6px;right:-6px;width:24px;height:24px;border-radius:50%;background:#DC2626;color:#fff;border:2px solid #fff;cursor:pointer;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center">✕</button></div>`;
-  };
-  reader.readAsDataURL(file);
+    preview.innerHTML = `<div style="margin-bottom:8px;position:relative;display:inline-block"><img src="${formImageData}" style="width:100px;height:100px;object-fit:cover;border-radius:14px;border:3px solid #E8DAEF"><button onclick="clearImage()" style="position:absolute;top:-6px;right:-6px;width:24px;height:24px;border-radius:50%;background:#DC2626;color:#fff;border:2px solid #fff;cursor:pointer;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center">\u2715</button></div>`;
+  } catch(e) {
+    if(statusEl) statusEl.textContent = 'Error compressing image. Try a smaller photo.';
+    console.error(e);
+  }
 }
 
 function clearImage(){
   formImageData = '';
   const preview = document.getElementById('f-preview');
   if(preview) preview.innerHTML = '';
+  const statusEl = document.getElementById('compress-status');
+  if(statusEl) statusEl.textContent = '';
 }
 
 function openForm(pin){
